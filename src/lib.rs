@@ -1,24 +1,29 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, near_bindgen};
+use near_sdk::{env, near_bindgen, collections::LookupMap, BorshStorageKey};
 use serde::Serialize;
-use std::collections::HashMap;
 
 near_sdk::setup_alloc!();
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    data: HashMap<String, Profile>
+    data: LookupMap<String, Profile>
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize)]
 pub struct Profile {
     profile_type: ProfileType,
-    content: HashMap<String, String>,
+    content: LookupMap<String, String>,
     subscribers: Vec<String>
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Clone, Serialize)]
+#[derive(BorshStorageKey, BorshSerialize)]
+pub enum StorageKeys {
+    Data,
+    Content
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, PartialEq, Debug)]
 pub enum ProfileType {
     Creator,
     Consumer
@@ -26,10 +31,10 @@ pub enum ProfileType {
 
 impl Default for Contract {
     fn default() -> Self {
-        let mut data = HashMap::new();
+        let mut data = LookupMap::new(StorageKeys::Data);
         data.insert(
-            "bowtiedgon.testnet".to_owned(),
-            Profile::default()
+            &"bowtiedgon.testnet".to_owned(),
+            &Profile::default()
         );
         Self {
             data
@@ -39,12 +44,17 @@ impl Default for Contract {
 
 impl Default for Profile {
     fn default() -> Self {
-        let mut content: HashMap<String, String> = HashMap::new();
-        content.insert("date".to_owned(), "content test".to_owned());
+        let mut content: LookupMap<String, String> = LookupMap::new(
+            StorageKeys::Content
+        );
+        content.insert(
+            &"date".to_owned(),
+            &"content test".to_owned()
+        );
         Self {
             profile_type: ProfileType::Creator,
             content,
-            subscribers: vec!("bowtiedgon.testnet".to_owned())
+            subscribers: vec!["bowtiedgon.testnet".to_owned()]
         }
     }
 }
@@ -52,13 +62,13 @@ impl Default for Profile {
 #[near_bindgen]
 impl Contract {
     pub fn get_profile(&mut self, account_id: String) -> Option<Profile> {
-        self.data.get(&account_id).cloned()
+        self.data.get(&account_id)
     }
 
     pub fn add_profile(&mut self, account_id: String, profile_type: ProfileType) {
         self.data.insert(
-            account_id,
-            Profile::new(
+            &account_id,
+            &Profile::new(
                 profile_type
             )
         );
@@ -67,7 +77,9 @@ impl Contract {
 
 impl Profile {
     pub fn new(profile_type: ProfileType) -> Self {
-        let content: HashMap<String, String> = HashMap::new();
+        let content: LookupMap<String, String> = LookupMap::new(
+            StorageKeys::Content
+        );
         let subscribers: Vec<String> = Vec::new();
         Self {
             profile_type,
@@ -75,6 +87,7 @@ impl Profile {
             subscribers
         }
     }
+
     pub fn subscribe(&mut self) {
         let account_id = env::signer_account_id();
         self.subscribers.push(account_id);
@@ -82,7 +95,7 @@ impl Profile {
 
     pub fn get_content(&self, account_id: String, date: String) -> Option<String> {
         if self.subscribers.contains(&account_id) {
-            self.content.get(&date).cloned()
+            self.content.get(&date)
         } else {
             env::log(b"Not a subscriber");
             None
@@ -90,7 +103,7 @@ impl Profile {
     }
 
     pub fn add_content(&mut self, date: String, content: String) {
-        self.content.insert(date, content);
+        self.content.insert(&date, &content);
     }
 }
 
@@ -123,6 +136,30 @@ mod tests {
     }
 
     #[test]
+    fn add_profile() {
+        let context = get_context(vec![], false);
+        testing_env!(context);
+        let account_id = "dan.testnet".to_owned();
+        let mut contract = Contract::default();
+        contract.add_profile(account_id, ProfileType::Consumer);
+        let test_profile = Profile::new(
+            ProfileType::Consumer
+        );
+        let profile = match contract.get_profile("dan.testnet".to_owned()) {
+            Some(profile) => profile,
+            None => panic!()
+        };
+        assert_eq!(
+            test_profile.profile_type,
+            profile.profile_type
+        );
+        assert_eq!(
+            test_profile.subscribers,
+            profile.subscribers
+        );
+    }
+
+    #[test]
     fn subscribe() {
         let context = get_context(vec![], false);
         testing_env!(context);
@@ -140,7 +177,7 @@ mod tests {
 
     #[test]
     fn get_content_deployer() {
-        let context = get_context(vec![], true);
+        let context = get_context(vec![], false);
         testing_env!(context);
         let mut contract = Contract::default();
         let profile = match contract.get_profile("bowtiedgon.testnet".to_owned()) {
@@ -158,7 +195,7 @@ mod tests {
 
     #[test]
     fn get_content_non_subscriber() {
-        let context = get_context(vec![], true);
+        let context = get_context(vec![], false);
         testing_env!(context);
         let mut contract = Contract::default();
         let profile = match contract.get_profile("bowtiedgon.testnet".to_owned()) {
