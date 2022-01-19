@@ -16,12 +16,12 @@ content, and set a price for their content.
 ## To Do
 
 ### Backend
-- [] Build out the data struct and methods for the smart contract
-- [] Make the subscription methods payable and apply a payment logic
-- [] Build out the tests
-- [] Deploy on testnet
+- [ ] Build out the data struct and methods for the smart contract
+- [ ] Make the subscription methods payable and apply a payment logic
+- [ ] Build out the tests
+- [ ] Deploy on testnet
 
 ### Frontend
-- [] Build the frontend design
-- [] Connect to the contract
-- [] Build frontend tests with jest
+- [ ] Build the frontend design
+- [ ] Connect to the contract
+- [ ] Build frontend tests with jest
