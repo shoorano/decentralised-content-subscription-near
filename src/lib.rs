@@ -1,29 +1,29 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, near_bindgen, collections::LookupMap, BorshStorageKey};
-use serde::Serialize;
+use near_sdk::{env, near_bindgen, collections::{TreeMap, LookupSet}, BorshStorageKey};
 
 near_sdk::setup_alloc!();
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    data: LookupMap<String, Profile>
+    data: TreeMap<String, Profile>
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Profile {
     profile_type: ProfileType,
-    content: LookupMap<String, String>,
-    subscribers: Vec<String>
+    content: TreeMap<String, String>,
+    subscribers: LookupSet<String>
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     Data,
-    Content
+    Content,
+    Subscriber
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, PartialEq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
 pub enum ProfileType {
     Creator,
     Consumer
@@ -31,7 +31,7 @@ pub enum ProfileType {
 
 impl Default for Contract {
     fn default() -> Self {
-        let mut data = LookupMap::new(StorageKeys::Data);
+        let mut data = TreeMap::new(StorageKeys::Data);
         data.insert(
             &"bowtiedgon.testnet".to_owned(),
             &Profile::default()
@@ -44,22 +44,25 @@ impl Default for Contract {
 
 impl Default for Profile {
     fn default() -> Self {
-        let mut content: LookupMap<String, String> = LookupMap::new(
+        let mut content: TreeMap<String, String> = TreeMap::new(
             StorageKeys::Content
         );
         content.insert(
             &"date".to_owned(),
             &"content test".to_owned()
         );
+        let mut subscribers = LookupSet::new(
+            StorageKeys::Subscriber
+        );
+        subscribers.insert(&"bowtiedgon.testnet".to_owned());
         Self {
             profile_type: ProfileType::Creator,
             content,
-            subscribers: vec!["bowtiedgon.testnet".to_owned()]
+            subscribers
         }
     }
 }
 
-#[near_bindgen]
 impl Contract {
     pub fn get_profile(&mut self, account_id: String) -> Option<Profile> {
         self.data.get(&account_id)
@@ -77,10 +80,12 @@ impl Contract {
 
 impl Profile {
     pub fn new(profile_type: ProfileType) -> Self {
-        let content: LookupMap<String, String> = LookupMap::new(
+        let content: TreeMap<String, String> = TreeMap::new(
             StorageKeys::Content
         );
-        let subscribers: Vec<String> = Vec::new();
+        let subscribers = LookupSet::new(
+            StorageKeys::Subscriber
+        );
         Self {
             profile_type,
             content,
@@ -90,7 +95,7 @@ impl Profile {
 
     pub fn subscribe(&mut self) {
         let account_id = env::signer_account_id();
-        self.subscribers.push(account_id);
+        self.subscribers.insert(&account_id);
     }
 
     pub fn get_content(&self, account_id: String, date: String) -> Option<String> {
@@ -107,7 +112,6 @@ impl Profile {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,8 +158,8 @@ mod tests {
             profile.profile_type
         );
         assert_eq!(
-            test_profile.subscribers,
-            profile.subscribers
+            test_profile.subscribers.contains(&"bowtiedgon.testnet".to_owned()),
+            profile.subscribers.contains(&"bowtiedgon.testnet".to_owned())
         );
     }
 
@@ -163,15 +167,17 @@ mod tests {
     fn subscribe() {
         let context = get_context(vec![], false);
         testing_env!(context);
+        let account_id = "dan.testnet".to_owned();
         let mut contract = Contract::default();
-        let mut profile = match contract.get_profile("bowtiedgon.testnet".to_owned()) {
+        contract.add_profile(account_id, ProfileType::Consumer);
+        let mut profile = match contract.get_profile("dan.testnet".to_owned()) {
             Some(profile) => profile,
-            None => return
+            None => panic!()
         };
         profile.subscribe();
         assert_eq!(
-            profile.subscribers[1],
-            "bowtiedgon.testnet".to_owned()
+            true,
+            profile.subscribers.contains(&"bowtiedgon.testnet".to_owned())
         );
     }
 
