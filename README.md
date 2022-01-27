@@ -16,8 +16,9 @@ content, and set a price for their content.
 ## To Do
 
 ### Backend
-- [ ] Build out the data struct and methods for the smart contract
+- [x] Build out the data struct and methods for the smart contract
 - [ ] Make the subscription methods payable and apply a payment logic
+- [ ] Make the contract secure (privatise the required methods)
 - [ ] Build out the tests
 - [ ] Deploy on testnet
 
