@@ -1,17 +1,20 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
     env,
-    near_bindgen,
     collections::{LookupMap, LookupSet},
     BorshStorageKey,
-    AccountId
+    AccountId,
+    json_types::U128,
+    Promise,
+    near_bindgen,
 };
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Profile {
     profile_type: ProfileType,
     content: LookupMap<String, String>,
-    subscribers: LookupSet<AccountId>
+    subscribers: LookupSet<AccountId>,
+    cost: U128
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -46,20 +49,20 @@ impl Default for Profile {
             &"date".to_owned(),
             &"content test".to_owned()
         );
-        let mut subscribers = LookupSet::new(
+        let subscribers = LookupSet::new(
             StorageKeys::Subscriber
         );
-        subscribers.insert(&"bob_near".parse().unwrap());
         Self {
             profile_type: ProfileType::Creator,
             content,
-            subscribers
+            subscribers,
+            cost: U128::from(10u128.pow(25))
         }
     }
 }
 
 impl Profile {
-    pub fn new(profile_type: ProfileType) -> Self {
+    pub fn new(profile_type: ProfileType, cost: U128) -> Self {
         let content: LookupMap<String, String> = LookupMap::new(
             StorageKeys::Content
         );
@@ -69,7 +72,8 @@ impl Profile {
         Self {
             profile_type,
             content,
-            subscribers
+            subscribers,
+            cost
         }
     }
 
@@ -78,16 +82,23 @@ impl Profile {
         self.subscribers.insert(&subscriber_address);
     }
 
-    pub fn get_content(&self, date: String) -> Result<String, String> {
-        let subscriber_address = env::signer_account_id();
-        if self.subscribers.contains(&subscriber_address) {
+    pub fn get_content(&self, date: String, is_owner: bool) -> Result<String, String> {
+        if is_owner {
             match self.content.get(&date) {
                 Some(content) => Ok(content),
                 None => Err("Could not find content for that date".to_owned())
             }
         } else {
-            env::log_str("Not a subscriber");
-            Err("Not a subscriber, please subscribe".to_owned())
+            let subscriber_address = env::signer_account_id();
+            if self.subscribers.contains(&subscriber_address) {
+                match self.content.get(&date) {
+                    Some(content) => Ok(content),
+                    None => Err("Could not find content for that date".to_owned())
+                }
+            } else {
+                env::log_str("Not a subscriber");
+                Err("Not a subscriber, please subscribe".to_owned())
+            }
         }
     }
 
@@ -99,7 +110,7 @@ impl Profile {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    data: LookupMap<AccountId, Profile>
+    data: LookupMap<AccountId, Profile>,
 }
 
 impl Default for Contract {
@@ -118,30 +129,36 @@ impl Default for Contract {
 #[near_bindgen]
 impl Contract {
     #[result_serializer(borsh)]
-    pub fn get_profile(&mut self, account_id: AccountId) ->  Option<Profile> {
+    pub fn get_profile(&mut self, account_id: &AccountId) ->  Option<Profile> {
         self.data.get(&account_id)
     }
 
-    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String) {
+    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: String) {
+        let cost = U128::from(cost.parse::<u128>().unwrap());
         self.data.insert(
             &account_id,
             &Profile::new(
-                ProfileType::new(&profile_type)
+                ProfileType::new(&profile_type),
+                cost
             )
         );
     }
 
     pub fn subscribe(&mut self, creator_address: AccountId) {
-        let mut profile = match self.get_profile(creator_address) {
+        let mut profile = match self.get_profile(&creator_address) {
             Some(profile) => profile,
             None => return
         };
+        let amount =profile.cost;
+        assert!(!profile.subscribers.contains(&env::signer_account_id()));
+        Promise::new(creator_address).transfer(amount.0);
         profile.subscribe();
+
     }
 
     pub fn add_content(&mut self, date: String, content: String) {
         let creator_address = env::signer_account_id();
-        let mut profile = match self.get_profile(creator_address) {
+        let mut profile = match self.get_profile(&creator_address) {
             Some(profile) => profile,
             None => return
         };
@@ -149,11 +166,12 @@ impl Contract {
     }
 
     pub fn get_content(&mut self, creator_address: AccountId, date: String) -> String {
-        let profile = match self.get_profile(creator_address) {
+        let profile = match self.get_profile(&creator_address) {
             Some(profile) => profile,
             None => panic!("this profile does not exist")
         };
-        match profile.get_content(date) {
+        let is_owner = env::signer_account_id() == creator_address;
+        match profile.get_content(date, is_owner) {
             Ok(content) => content,
             Err(error) => panic!("{}", error)
         }
@@ -167,24 +185,30 @@ mod tests {
     use near_sdk::test_utils::{VMContextBuilder};
     use near_sdk::{testing_env, VMContext};
 
-    fn get_context(is_view: bool, signer_address: AccountId) -> VMContext {
+    fn get_context(is_view: bool, signer_address: AccountId, signer_balance: u128) -> VMContext {
         VMContextBuilder::new()
             .signer_account_id(signer_address)
+            .account_balance(signer_balance)
             .is_view(is_view)
             .build()
     }
 
     #[test]
     fn add_profile() {
-        let context = get_context(false, "consumer".parse().unwrap());
+        let context = get_context(
+            false,
+            "consumer".parse().unwrap(),
+            10u128.pow(20)
+        );
         testing_env!(context);
         let account_id = "dan.testnet".parse().unwrap();
         let mut contract = Contract::default();
-        contract.add_profile(account_id, "consumer".to_owned());
+        contract.add_profile(account_id, "consumer".to_owned(), "10000".to_owned());
         let test_profile = Profile::new(
-            ProfileType::Consumer
+            ProfileType::Consumer,
+            U128::from(10u128.pow(20))
         );
-        let profile = match contract.get_profile("dan.testnet".parse().unwrap()) {
+        let profile = match contract.get_profile(&"dan.testnet".parse().unwrap()) {
             Some(profile) => profile,
             None => panic!()
         };
@@ -200,11 +224,15 @@ mod tests {
 
     #[test]
     fn subscribe() {
-        let context = get_context(false, "bob_near".parse().unwrap());
+        let context = get_context(
+            false,
+            "dan.testnet".parse().unwrap(),
+            10u128.pow(25)
+        );
         testing_env!(context);
         let mut contract = Contract::default();
         contract.subscribe("bob_near".parse().unwrap());
-        let profile = match contract.get_profile("dan.testnet".parse().unwrap()) {
+        let profile = match contract.get_profile(&"bob_near".parse().unwrap()) {
             Some(profile) => profile,
             None => return
         };
@@ -215,22 +243,31 @@ mod tests {
     }
 
     #[test]
-    fn get_content_deployer() {
-        let context = get_context(false, "bob_near".parse().unwrap());
+    fn subscribe_low_balance() {
+        let context = get_context(
+            false,
+            "dan.testnet".parse().unwrap(),
+            10u128.pow(24)
+        );
         testing_env!(context);
-        let mut contract = Contract::default();
-        assert_eq!(
-            "content test".to_owned(),
-            contract.get_content(
-                "bob_near".parse().unwrap(),
-                "date".to_owned()
-            )
+        let result = std::panic::catch_unwind(|| 
+            {
+                let mut contract = Contract::default();
+                contract.subscribe("bob_near".parse().unwrap());
+            }
+        );
+        assert!(
+            result.is_err()
         );
     }
 
     #[test]
     fn get_content_non_subscriber() {
-        let context = get_context(false, "not_bob_near".parse().unwrap());
+        let context = get_context(
+            false,
+            "not_bob_near".parse().unwrap(),
+            10u128.pow(25)
+        );
         testing_env!(context);
         let result = std::panic::catch_unwind(|| {
                 let mut contract = Contract::default();
@@ -247,7 +284,11 @@ mod tests {
 
     #[test]
     fn get_content_subscriber() {
-        let context = get_context(false, "bob_near".parse().unwrap());
+        let context = get_context(
+            false,
+            "dan_testnet".parse().unwrap(),
+            10u128.pow(25)
+        );
         testing_env!(context);
         let mut contract = Contract::default();
         contract.subscribe("bob_near".parse().unwrap());
@@ -262,7 +303,11 @@ mod tests {
 
     #[test]
     fn add_content() {
-        let context = get_context(false, "bob_near".parse().unwrap());
+        let context = get_context(
+            false,
+            "bob_near".parse().unwrap(),
+            10u128.pow(25)
+        );
         testing_env!(context);
         let mut contract = Contract::default();
         contract.add_content("date part 2".to_owned(), "content test part 2".to_owned());
