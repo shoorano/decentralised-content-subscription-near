@@ -20,7 +20,7 @@ echo
 
 echo call add_profile with real testnet account
 echo
-near call tester.bowtiedgon.testnet add_profile '{"account_id": "bowtiedgon.testnet", "profile_type": "creator", "cost": "1000000000000000000000"}' --account-id tester.bowtiedgon.testnet
+near call tester.bowtiedgon.testnet add_profile '{"account_id": "bowtiedgon.testnet", "profile_type": "creator", "cost": "1000000000000000000000"}' --account-id bowtiedgon.testnet
 echo
 
 echo test get_profile - expect no return value but no errors

@@ -159,7 +159,6 @@ impl Contract {
         assert!(!profile.subscribers.contains(&env::signer_account_id()));
         Promise::new(creator_address).transfer(amount.0);
         profile.subscribe();
-
     }
 
     pub fn add_content(&mut self, date: String, content: String) {
