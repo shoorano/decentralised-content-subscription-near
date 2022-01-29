@@ -103,7 +103,13 @@ impl Profile {
     }
 
     pub fn add_content(&mut self, date: String, content: String) {
-        self.content.insert(&date, &content);
+        match self.profile_type {
+            ProfileType::Creator => self.content.insert(&date, &content),
+            ProfileType::Consumer => panic!(
+                "{}",
+                "Please create a creator profile to add content".to_owned()
+            )
+        };
     }
 }
 
@@ -269,7 +275,8 @@ mod tests {
             10u128.pow(25)
         );
         testing_env!(context);
-        let result = std::panic::catch_unwind(|| {
+        let result = std::panic::catch_unwind(||
+            {
                 let mut contract = Contract::default();
                 contract.get_content(
                     "bob_near".parse().unwrap(),
@@ -302,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn add_content() {
+    fn add_content_creator() {
         let context = get_context(
             false,
             "bob_near".parse().unwrap(),
@@ -317,6 +324,33 @@ mod tests {
                 "bob_near".parse().unwrap(),
                 "date part 2".to_owned()
             )
+        );
+    }
+
+    #[test]
+    fn add_content_consumer() {
+        let context = get_context(
+            false,
+            "consumer".parse().unwrap(),
+            10u128.pow(25)
+        );
+        testing_env!(context);
+        let result = std::panic::catch_unwind(|| 
+            {
+                let mut contract = Contract::default();
+                contract.add_profile(
+                    "consumer".parse().unwrap(),
+                    "consumer".to_owned(),
+                    "100000000".to_owned()
+                );
+                contract.add_content(
+                    "date part 2".to_owned(),
+                    "content test part 2".to_owned()
+                );
+            }
+        );
+        assert!(
+            result.is_err()
         );
     }
 }
