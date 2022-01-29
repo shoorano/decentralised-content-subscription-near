@@ -263,7 +263,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "decentralised-patreon"
+name = "decentralised-content-subscription-near"
 version = "0.1.0"
 dependencies = [
  "near-sdk",
