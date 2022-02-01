@@ -11,3 +11,4 @@ crate-type = ["cdylib", "rlib"]
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 near-sdk = "4.0.0-pre.6"
+near-units = "0.1.0"
