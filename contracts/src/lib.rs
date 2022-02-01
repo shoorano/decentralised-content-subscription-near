@@ -354,36 +354,3 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use workspaces::prelude::*;
-
-    #[tokio::test]
-    async fn test_deploy_and_view() -> anyhow::Result<()> {
-        let worker = workspaces::testnet();
-        
-        let contract = worker.dev_deploy(include_bytes!(
-            "../target/wasm32-unknown-unknown/release/decentralised_patreon.wasm")
-            .to_vec()
-        )
-            .await
-            .expect("could not dev-deploy contract");
-
-        let result: String = contract.view(
-            &worker,
-            "add_profile",
-            serde_json::json!({
-                "account_id": contract.id(),
-                "profile_type": "creator",
-                "cost": "10000000000000000000000"
-            })
-            .to_string()
-            .into_bytes(),
-        )
-        .await?
-        .json()?;
-        
-        assert_eq!(result, "1");
-        Ok(())
-    }
-}
