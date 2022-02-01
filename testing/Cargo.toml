@@ -1,0 +1,21 @@
+[package]
+name = "workspaces-testing-suite"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[dev-dependencies]
+anyhow = "1.0"
+borsh = "0.9"
+maplit = "1.0"
+near-units = "0.1.0"
+# arbitrary_precision enabled for u128 types that workspaces requires for Balance types
+serde_json = { version = "1.0", features = ["arbitrary_precision"] }
+tokio = { version = "1.10.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
+workspaces = "0.1"
+
+[[example]]
+name = "decentralised_content_subscription_near"
+path = "src/decentralised_content_subscription_near.rs"
