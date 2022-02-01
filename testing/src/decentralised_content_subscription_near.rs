@@ -1,5 +1,6 @@
 use serde_json::json;
 use workspaces::prelude::*;
+use workspaces::{Account, Worker, Contract, DevNetwork};
 
 const DECENTRALISED_CONTENT_SUBSCRIPTION_NEAR_WASM_FILEPATH: &str = "contracts/target/wasm32-unknown-unknown/release/decentralised_content_subscription_near.wasm";
 
@@ -7,6 +8,7 @@ const DECENTRALISED_CONTENT_SUBSCRIPTION_NEAR_WASM_FILEPATH: &str = "contracts/t
 async fn main() -> anyhow::Result<()> {
     let worker_deployer = workspaces::testnet();
     let worker_creator = workspaces::testnet();
+    let worker_consumer = workspaces::testnet();
     
     let wasm = std::fs::read(DECENTRALISED_CONTENT_SUBSCRIPTION_NEAR_WASM_FILEPATH)?;
 
@@ -17,8 +19,40 @@ async fn main() -> anyhow::Result<()> {
     let creator = worker_creator.dev_create_account()
         .await
         .expect("failed to create creator account");
+    let content = "https://www.youtube.com/watch?v=MddGbXgIt2E".to_owned();
+    let creator_profile_cost = "1".to_owned();
 
-    let outcome_add_profile = creator
+    let consumer = worker_consumer.dev_create_account()
+        .await
+        .expect("failed to create consumer account");
+
+    add_profile(&creator, &worker_creator, &contract, &creator_profile_cost)
+        .await
+        .expect("error when adding profile");
+    
+    add_content(&creator, &worker_creator, &contract, &content)
+        .await
+        .expect("error when adding content");
+        
+    get_content(&creator, &creator, &worker_creator, &contract, &content)
+        .await
+        .expect("error when getting content");
+    
+    match get_content(&consumer, &creator, &worker_consumer, &contract, &content).await {
+        Ok(_) => println!("get_content with none subscriber: failed"),
+        Err(_) => println!("get_content with none subscriber: passed")
+    }
+
+    // tests to add
+    // subscribe then get_content
+    // subscribe with low balance
+
+    Ok(())
+    }
+
+
+async fn add_profile(creator: &Account, worker_creator: &Worker<impl DevNetwork>, contract: &Contract, cost: &str) -> anyhow::Result<()> {
+    creator
         .call(
             &worker_creator,
             contract.id().to_owned(),
@@ -27,31 +61,39 @@ async fn main() -> anyhow::Result<()> {
         .args_json(json!({
             "account_id": &creator.id().to_owned(),
             "profile_type": "creator",
-            "cost": "100000000000000000000"
+            "cost": cost
         }))?
         .transact()
         .await?;
 
-    println!("result add profile: {:?}", outcome_add_profile);
+    println!("add_profile test: passed");
 
-    let outcome_add_content = creator
+    Ok(())
+}
+
+async fn add_content(creator: &Account, worker: &Worker<impl DevNetwork>, contract: &Contract, content: &str) -> anyhow::Result<()> {
+    creator
         .call(
-            &worker_creator,
+            &worker,
             contract.id().to_owned(),
             "add_content"
         )
         .args_json(json!({
             "date": "31-01-2022",
-            "content": "https://www.youtube.com/watch?v=MddGbXgIt2E"
+            "content": content
         }))?
         .transact()
         .await?;
 
-    println!("result get profile: {:?}", outcome_add_content);
+    println!("add_content test: passed");
 
-    let result = creator
+    Ok(())
+}
+
+async fn get_content(caller: &Account, creator: &Account, worker: &Worker<impl DevNetwork>, contract: &Contract, content: &str) -> anyhow::Result<()> {
+    let result = caller
         .call(
-            &worker_creator,
+            &worker,
             contract.id().to_owned(),
             "get_content"
         )
@@ -62,10 +104,14 @@ async fn main() -> anyhow::Result<()> {
         .transact()
         .await?
         .json::<String>();
-    
+
     match result {
-        Ok(content) => println!("result: {:?}", content),
-        Err(error) => println!("error: {:?}", error)
+        Ok(result) => {
+            if (result == content.to_owned()) == true {
+            println!("get_content test: passed");
+            }
+        },
+        Err(error) => return Err(error)
     }
     Ok(())
 }
