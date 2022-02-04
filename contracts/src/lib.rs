@@ -139,8 +139,8 @@ impl Contract {
         self.data.get(&account_id)
     }
 
-    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: u128) {
-        let cost_in_yocto_near = U128::from(cost * 1_000_000_000_000_000_000_000_000);
+    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: String) {
+        let cost_in_yocto_near = U128::from(cost.parse::<u128>().unwrap() * 1_000_000_000_000_000_000_000_000);
         self.data.insert(
             &account_id,
             &Profile::new(
@@ -208,7 +208,7 @@ mod tests {
         testing_env!(context);
         let account_id = "dan.testnet".parse().unwrap();
         let mut contract = Contract::default();
-        contract.add_profile(account_id, "consumer".to_owned(), 1);
+        contract.add_profile(account_id, "consumer".to_owned(), "1".to_owned());
         let test_profile = Profile::new(
             ProfileType::Consumer,
             U128::from(10u128.pow(20))
@@ -340,7 +340,7 @@ mod tests {
                 contract.add_profile(
                     "consumer".parse().unwrap(),
                     "consumer".to_owned(),
-                    1
+                    "1".to_owned()
                 );
                 contract.add_content(
                     "date part 2".to_owned(),

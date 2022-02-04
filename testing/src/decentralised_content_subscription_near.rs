@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     // content to be added to the creators profile
     let content = "https://www.youtube.com/watch?v=MddGbXgIt2E".to_owned();
     // cost to subscribe to creators profile in NEAR
-    let creator_profile_cost = "1".to_owned();
+    let creator_profile_cost = "1";
 
     // create an Account struct for a consumer who will subscribe to creators profile
     let consumer = worker_consumer.dev_create_account()
@@ -110,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
             "date": "31-01-2022"
         }),
         &content,
-        false
+        true
     ).await {
         Ok(_) => println!("get_content with none subscriber: failed"),
         Err(_) => println!("get_content with none subscriber: passed")
