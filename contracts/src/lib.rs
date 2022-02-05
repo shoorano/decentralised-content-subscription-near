@@ -14,14 +14,15 @@ pub struct Profile {
     profile_type: ProfileType,
     content: LookupMap<String, String>,
     subscribers: LookupSet<AccountId>,
-    cost: U128
+    costs: LookupMap<String, U128>
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     Data,
     Content,
-    Subscriber
+    Subscriber,
+    Cost
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
@@ -52,11 +53,15 @@ impl Default for Profile {
         let subscribers = LookupSet::new(
             StorageKeys::Subscriber
         );
+        let mut costs: LookupMap<String, U128> = LookupMap::new(
+            StorageKeys::Cost
+        );
+        costs.insert(&"cost".to_owned(), &U128::from(10u128.pow(25)));
         Self {
             profile_type: ProfileType::Creator,
             content,
             subscribers,
-            cost: U128::from(10u128.pow(25))
+            costs
         }
     }
 }
@@ -69,11 +74,15 @@ impl Profile {
         let subscribers = LookupSet::new(
             StorageKeys::Subscriber
         );
+        let mut costs = LookupMap::<String, U128>::new(
+            StorageKeys::Cost
+        );
+        costs.insert(&"cost".to_owned(), &cost);
         Self {
             profile_type,
             content,
             subscribers,
-            cost
+            costs
         }
     }
 
@@ -113,7 +122,7 @@ impl Profile {
     }
 
     pub fn update_cost(mut self, cost: U128) {
-        self.cost.0 = cost.0;
+        self.costs.insert(&"cost".to_owned(), &cost);
     }
 }
 
@@ -161,7 +170,10 @@ impl Contract {
             Some(profile) => profile,
             None => return
         };
-        let amount =profile.cost;
+        let amount = match profile.costs.get(&"cost".to_owned()) {
+            Some(cost) => cost,
+            None => panic!("could not access cost")
+        };
         assert!(!profile.subscribers.contains(&env::signer_account_id()));
         Promise::new(creator_address).transfer(amount.0);
         profile.subscribe();
@@ -194,7 +206,11 @@ impl Contract {
             Some(profile) => profile,
             None => panic!("this profile does not exist")
         };
-        format!("{}", profile.cost.0 / 1_000_000_000_000_000_000_000_000)
+        let cost = match profile.costs.get(&"cost".to_owned()) {
+            Some(cost) => cost,
+            None => panic!("could not access cost")
+        };
+        format!("{}", cost.0 / 1_000_000_000_000_000_000_000_000)
     }
 
     pub fn update_cost(&mut self, cost: String) {
@@ -403,32 +419,5 @@ mod tests {
             "2".to_owned()
         );
     }
-
-    // #[test]
-    // fn test_update_cost_consumer() {
-    //     let context = get_context(
-    //         false,
-    //         "creator".parse().unwrap(),
-    //         10u128.pow(25)
-    //     );
-    //     testing_env!(context);
-    //     let result = std::panic::catch_unwind(|| 
-    //         {
-    //             let mut contract = Contract::default();
-    //             contract.add_profile(
-    //                 "consumer".parse().unwrap(),
-    //                 "consumer".to_owned(),
-    //                 "1".to_owned()
-    //             );
-    //             contract.add_content(
-    //                 "date part 2".to_owned(),
-    //                 "content test part 2".to_owned()
-    //             );
-    //         }
-    //     );
-    //     assert!(
-    //         result.is_err()
-    //     );
-    // }
 }
 
