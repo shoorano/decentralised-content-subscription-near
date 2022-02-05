@@ -1,6 +1,7 @@
 echo build contract wasm
 echo
 cargo build --target wasm32-unknown-unknown --release
+cp target/wasm32-unknown-unknown/release/decentralised_content_subscription_near.wasm res/decentralised_content_subscription_near.wasm
 echo
 
 # echo delete contract account
