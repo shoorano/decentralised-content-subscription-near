@@ -1,9 +1,8 @@
 # Decentralised Content Subscription - NEAR
 
 ## MVP
-The end goal of this project is to build a peer-to-peer 
-subscription model, but with a rust smart contract on the NEAR blockchain
-as the backend / database.
+The end goal of this project is to build a peer-to-peer subscription model, but
+with a rust smart contract on the NEAR blockchain as the backend / database.
 
 Creators will be able to store content as a `String` that can be anything
 from markdown, ready to be parsed on the frontend or a youtube link to a private
@@ -20,11 +19,19 @@ content, and set a price for their content.
 - [X] Make the subscription methods payable and apply a payment logic
 - [X] Build out the tests
 - [X] Deploy on testnet
+- [ ] Build out integration tests using workspaces-rs
 
 ### Frontend
+- [ ] Decide on framework (vanilla-js, next.js, vue, react or yew/rocket-rs??)
 - [ ] Build the frontend design
 - [ ] Connect to the contract
-- [ ] Build frontend tests with jest
+- [ ] Build frontend tests
 
 ### Next Steps
-- [ ]  Audit / secure the contract
+- [ ]  Audit / secure the contract 
+  - [ ]  add perishable guard
+  - [ ]  add account guards for appropriate get methods
+  - [ ]  research other possible areas (re-entrancy etc)
+
+* Found a useful [link](https://www.youtube.com/watch?v=wC6CS7js-tc) for basic
+contract guard fundamentals

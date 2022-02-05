@@ -3,7 +3,7 @@ use serde_json::json;
 use workspaces::prelude::*;
 use workspaces::{Account, Worker, Contract, DevNetwork};
 
-const DECENTRALISED_CONTENT_SUBSCRIPTION_NEAR_WASM_FILEPATH: &str = "target/wasm32-unknown-unknown/release/decentralised_content_subscription_near.wasm";
+const DECENTRALISED_CONTENT_SUBSCRIPTION_NEAR_WASM_FILEPATH: &str = "contracts/res/decentralised_content_subscription_near.wasm";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
     let worker_deployer = workspaces::testnet();
     let worker_creator = workspaces::testnet();
     let worker_consumer = workspaces::testnet();
+    let worker_consumer_low_balance = workspaces::testnet();
     
     // deploy the contract
     let contract = worker_deployer.dev_deploy(wasm)
@@ -36,81 +37,62 @@ async fn main() -> anyhow::Result<()> {
     // content to be added to the creators profile
     let content = "https://www.youtube.com/watch?v=MddGbXgIt2E".to_owned();
     // cost to subscribe to creators profile in NEAR
-    let creator_profile_cost = "1".to_owned();
+    let creator_profile_cost = "201";
 
     // create an Account struct for a consumer who will subscribe to creators profile
     let consumer = worker_consumer.dev_create_account()
         .await
         .expect("failed to create consumer account");
+    
+    // create an Account struct for a consumer who will subscribe to creators profile
+    // the creator will increase the cost to above the balance of test accounts
+    let consumer_low_balace = worker_consumer_low_balance.dev_create_account()
+        .await
+        .expect("failed to create consumer_low_balace account");
 
     // tests add_profile method of contract
-    test_contract_method(
-        &creator,
-        &worker_creator,
-        &contract,
-        "add_profile",
+    test_contract_method(&creator, &worker_creator,&contract,"add_profile",
         json!({
             "account_id": &creator.id().to_owned(),
             "profile_type": "creator",
             "cost": creator_profile_cost
         }),
-        "",
-        false
+        "",false
     ).await.expect("error when adding profile");
 
     // test get_profile method
-    test_contract_method(
-        &creator,
-        &worker_creator,
-        &contract,
-        "get_profile",
+    test_contract_method(&creator, &worker_creator, &contract, "get_profile",
         json!({
             "account_id": &creator.id().to_owned()
         }),
-        "",
-        false
+        "", false
     ).await.expect("error when getting profile");
     
     // tests add_content method of contract        
-    test_contract_method(
-        &creator,
-        &worker_creator,
-        &contract,
-        "add_content",
+    test_contract_method(&creator, &worker_creator, &contract, "add_content",
         json!({
             "date": "31-01-2022",
             "content": &content
         }),
-        "",
-        false
+        "", false
     ).await.expect("error when adding content");
     
     // tests get_content method of contract - called by profile creator
-    test_contract_method(
-        &creator,
-        &worker_creator,
-        &contract,
-        "get_content",
+    test_contract_method(&creator, &worker_creator, &contract, "get_content",
         json!({
             "creator_address": creator.id(),
             "date": "31-01-2022"
         }),
-        &content,
-        true
+        &content, true
     ).await.expect("error when getting content");
     
     // tests get_content method of contract - expects a panic as called by non-subscriber
-    match test_contract_method(
-        &consumer,
-        &worker_consumer,
-        &contract,
-        "get_content",
+    match test_contract_method(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
             "date": "31-01-2022"
         }),
-        &content,
-        false
+        &content, true
     ).await {
         Ok(_) => println!("get_content with none subscriber: failed"),
         Err(_) => println!("get_content with none subscriber: passed")
@@ -118,41 +100,41 @@ async fn main() -> anyhow::Result<()> {
     
     // subscribe then get_content
     // subscribe
-    test_contract_method(
-        &consumer,
-        &worker_consumer,
-        &contract,
-        "subscribe",
+    test_contract_method(&consumer, &worker_consumer, &contract, "subscribe",
         json!({
             "creator_address": &creator.id().to_owned()
         }),
-        "",
-        false
+        "", false
     ).await.expect("error when subscribing");
 
     // get_content now that consumer has subscribed to creator - expects content to be returned
-    test_contract_method(
-        &consumer,
-        &worker_consumer,
-        &contract,
-        "get_content",
+    test_contract_method(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
             "date": "31-01-2022"
         }),
-        &content,
-        true
+        &content, true
     ).await.expect("error when getting content with subscriber");
     
     // tests to add
-    // subscribe with low balance
+    // subscribe with insufficient funds
 
+    remove_near_credentials();
     Ok(())
 }
 
 fn build_contract() {
     let output = Command::new("sh")
                 .arg("contracts/build.sh")
+                .output()
+                .expect("failed to execute process");
+    println!("Building contract output: {:?}", output);
+}
+
+fn remove_near_credentials() {
+    let output = Command::new("rm")
+                .arg("-rf")
+                .arg(".near-credentials/")
                 .output()
                 .expect("failed to execute process");
     println!("Building contract output: {:?}", output);
@@ -179,11 +161,12 @@ async fn test_contract_method(
         .transact()
         .await?;
     
-    // for method
+    // for methods which return non-serialized data
     if !result_is_serializable {
         return Ok(());
     }
 
+    // parse result to json
     match result.json::<String>() {
         Ok(result) => {
             if (result == expected_result) == true {

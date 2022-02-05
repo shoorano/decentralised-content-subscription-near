@@ -111,6 +111,10 @@ impl Profile {
             )
         };
     }
+
+    pub fn update_cost(mut self, cost: U128) {
+        self.cost.0 = cost.0;
+    }
 }
 
 #[near_bindgen]
@@ -139,8 +143,10 @@ impl Contract {
         self.data.get(&account_id)
     }
 
-    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: u128) {
-        let cost_in_yocto_near = U128::from(cost * 1_000_000_000_000_000_000_000_000);
+    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: String) {
+        let cost_in_yocto_near = U128::from(
+            cost.parse::<u128>().unwrap() * 1_000_000_000_000_000_000_000_000
+        );
         self.data.insert(
             &account_id,
             &Profile::new(
@@ -181,6 +187,27 @@ impl Contract {
             Err(error) => panic!("{}", error)
         }
     }
+
+    pub fn get_cost(mut self) -> String {
+        let account_id = env::signer_account_id();
+        let profile = match self.get_profile(&account_id) {
+            Some(profile) => profile,
+            None => panic!("this profile does not exist")
+        };
+        format!("{}", profile.cost.0 / 1_000_000_000_000_000_000_000_000)
+    }
+
+    pub fn update_cost(&mut self, cost: String) {
+        let account_id = env::signer_account_id();
+        let profile = match self.get_profile(&account_id) {
+            Some(profile) => profile,
+            None => panic!("this profile does not exist")
+        };
+        let cost_in_yocto_near = U128::from(
+            cost.parse::<u128>().unwrap() * 1_000_000_000_000_000_000_000_000
+        );
+        profile.update_cost(cost_in_yocto_near);
+    }
 }
 
 
@@ -199,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn add_profile() {
+    fn test_add_profile() {
         let context = get_context(
             false,
             "consumer".parse().unwrap(),
@@ -208,7 +235,7 @@ mod tests {
         testing_env!(context);
         let account_id = "dan.testnet".parse().unwrap();
         let mut contract = Contract::default();
-        contract.add_profile(account_id, "consumer".to_owned(), 1);
+        contract.add_profile(account_id, "consumer".to_owned(), "1".to_owned());
         let test_profile = Profile::new(
             ProfileType::Consumer,
             U128::from(10u128.pow(20))
@@ -228,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn subscribe() {
+    fn test_subscribe() {
         let context = get_context(
             false,
             "dan.testnet".parse().unwrap(),
@@ -248,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_low_balance() {
+    fn test_subscribe_low_balance() {
         let context = get_context(
             false,
             "dan.testnet".parse().unwrap(),
@@ -267,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn get_content_non_subscriber() {
+    fn test_get_content_non_subscriber() {
         let context = get_context(
             false,
             "not_bob_near".parse().unwrap(),
@@ -289,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn get_content_subscriber() {
+    fn test_get_content_subscriber() {
         let context = get_context(
             false,
             "dan_testnet".parse().unwrap(),
@@ -308,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn add_content_creator() {
+    fn test_add_content_creator() {
         let context = get_context(
             false,
             "bob_near".parse().unwrap(),
@@ -327,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn add_content_consumer() {
+    fn test_add_content_consumer() {
         let context = get_context(
             false,
             "consumer".parse().unwrap(),
@@ -340,7 +367,7 @@ mod tests {
                 contract.add_profile(
                     "consumer".parse().unwrap(),
                     "consumer".to_owned(),
-                    1
+                    "1".to_owned()
                 );
                 contract.add_content(
                     "date part 2".to_owned(),
@@ -352,5 +379,56 @@ mod tests {
             result.is_err()
         );
     }
+
+    #[test]
+    fn test_update_cost() {
+        let context = get_context(
+            false,
+            "creator".parse().unwrap(),
+            10u128.pow(25)
+        );
+        testing_env!(context);
+
+        let mut contract = Contract::default();
+        contract.add_profile(
+            "creator".parse().unwrap(),
+            "creator".to_owned(),
+            "4".to_owned()
+        );
+        contract.update_cost(
+            "2".to_owned(),
+        );
+        assert_eq!(
+            contract.get_cost(),
+            "2".to_owned()
+        );
+    }
+
+    // #[test]
+    // fn test_update_cost_consumer() {
+    //     let context = get_context(
+    //         false,
+    //         "creator".parse().unwrap(),
+    //         10u128.pow(25)
+    //     );
+    //     testing_env!(context);
+    //     let result = std::panic::catch_unwind(|| 
+    //         {
+    //             let mut contract = Contract::default();
+    //             contract.add_profile(
+    //                 "consumer".parse().unwrap(),
+    //                 "consumer".to_owned(),
+    //                 "1".to_owned()
+    //             );
+    //             contract.add_content(
+    //                 "date part 2".to_owned(),
+    //                 "content test part 2".to_owned()
+    //             );
+    //         }
+    //     );
+    //     assert!(
+    //         result.is_err()
+    //     );
+    // }
 }
 

@@ -1,6 +1,7 @@
 echo build contract wasm
 echo
 cargo build --target wasm32-unknown-unknown --release
+cp target/wasm32-unknown-unknown/release/decentralised_content_subscription_near.wasm res/decentralised_content_subscription_near.wasm
 echo
 
 # echo delete contract account
@@ -20,7 +21,7 @@ echo
 
 # echo call add_profile with real testnet account
 # echo
-# near call tester.bowtiedgon.testnet add_profile '{"account_id": "bowtiedgon.testnet", "profile_type": "creator", "cost": "1000000000000000000000"}' --account-id bowtiedgon.testnet
+# near call tester.bowtiedgon.testnet add_profile '{"account_id": "bowtiedgon.testnet", "profile_type": "creator", "cost": "1"}' --account-id bowtiedgon.testnet
 # echo
 
 # echo test get_profile - expect no return value but no errors
