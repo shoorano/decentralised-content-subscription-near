@@ -19,7 +19,7 @@ content, and set a price for their content.
 - [X] Make the subscription methods payable and apply a payment logic
 - [X] Build out the tests
 - [X] Deploy on testnet
-- [ ] Build out integration tests using workspaces-rs
+- [X] Build out integration tests using workspaces-rs
 
 ### Frontend
 - [ ] Decide on framework (vanilla-js, next.js, vue, react or yew/rocket-rs??)
