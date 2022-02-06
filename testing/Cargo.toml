@@ -19,3 +19,7 @@ workspaces = "0.1"
 [[example]]
 name = "decentralised_content_subscription_near"
 path = "src/decentralised_content_subscription_near.rs"
+
+[[example]]
+name = "sandbox"
+path = "src/sandbox.rs"
