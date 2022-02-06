@@ -34,10 +34,12 @@ async fn main() -> anyhow::Result<()> {
     let creator = worker_creator.dev_create_account()
         .await
         .expect("failed to create creator account");
+    // cost to subscribe to creators profile in NEAR
+    let creator_profile_cost = "1";
     // content to be added to the creators profile
     let content = "https://www.youtube.com/watch?v=MddGbXgIt2E".to_owned();
-    // cost to subscribe to creators profile in NEAR
-    let creator_profile_cost = "201";
+    // date to be used as a key for creators content
+    let content_date = "31-01-2022".to_owned();
 
     // create an Account struct for a consumer who will subscribe to creators profile
     let consumer = worker_consumer.dev_create_account()
@@ -51,37 +53,52 @@ async fn main() -> anyhow::Result<()> {
         .expect("failed to create consumer_low_balace account");
 
     // tests add_profile method of contract
-    test_contract_method(&creator, &worker_creator,&contract,"add_profile",
+    match test_contract_method(&creator, &worker_creator,&contract,"add_profile",
         json!({
             "account_id": &creator.id().to_owned(),
             "profile_type": "creator",
             "cost": creator_profile_cost
         }),
-        "",false
-    ).await.expect("error when adding profile");
+        "", false
+    ).await {
+        Ok(_) => println!("add_profile with creator: passed"),
+        Err(error) => {
+            println!("add_profile with creator: failed");
+            println!("error: {}", error);
+        }
+    };
 
     // test get_profile method
-    test_contract_method(&creator, &worker_creator, &contract, "get_profile",
+    match test_contract_method(&creator, &worker_creator, &contract, "get_profile",
         json!({
             "account_id": &creator.id().to_owned()
         }),
         "", false
-    ).await.expect("error when getting profile");
+    ).await {
+        Ok(_) => println!("get_profile with creator: passed"),
+        Err(error) => {
+            println!("get_profile with creator: failed");
+            println!("error: {}", error);
+        }
+    };
     
     // tests add_content method of contract        
-    test_contract_method(&creator, &worker_creator, &contract, "add_content",
+    match test_contract_method(&creator, &worker_creator, &contract, "add_content",
         json!({
-            "date": "31-01-2022",
+            "date": &content_date,
             "content": &content
         }),
         "", false
-    ).await.expect("error when adding content");
+    ).await {
+        Ok(_) => println!("add_content with creator: passed"),
+        Err(_) => println!("add_content with creator: failed")
+    };
     
     // tests get_content method of contract - called by profile creator
     test_contract_method(&creator, &worker_creator, &contract, "get_content",
         json!({
             "creator_address": creator.id(),
-            "date": "31-01-2022"
+            "date": &content_date
         }),
         &content, true
     ).await.expect("error when getting content");
@@ -90,34 +107,102 @@ async fn main() -> anyhow::Result<()> {
     match test_contract_method(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
-            "date": "31-01-2022"
+            "date": &content_date
         }),
         &content, true
     ).await {
         Ok(_) => println!("get_content with none subscriber: failed"),
-        Err(_) => println!("get_content with none subscriber: passed")
-    }
+        Err(error) => {
+            println!("get_content with none subscriber: passed");
+            println!("error: {}", error);
+        }
+    };
     
     // subscribe then get_content
     // subscribe
-    test_contract_method(&consumer, &worker_consumer, &contract, "subscribe",
+    match test_contract_method(&consumer, &worker_consumer, &contract, "subscribe",
         json!({
             "creator_address": &creator.id().to_owned()
         }),
         "", false
-    ).await.expect("error when subscribing");
+    ).await {
+        Ok(_) => println!("subscribe with consumer: passed"),
+        Err(error) => {
+            println!("subscribe with consumer: failed");
+            println!("error: {}", error);
+        }
+    };
 
     // get_content now that consumer has subscribed to creator - expects content to be returned
     test_contract_method(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
-            "date": "31-01-2022"
+            "date": &content_date
         }),
-        &content, true
+        &content, false
     ).await.expect("error when getting content with subscriber");
     
-    // tests to add
     // subscribe with insufficient funds
+    // update cost to above test account balance
+    match test_contract_method(&creator, &worker_creator, &contract, "update_cost",
+        json!({
+            "cost": "201"
+        }),
+        "", false
+    ).await {
+        Ok(_) => println!("update_cost with creator: passed"),
+        Err(error) => {
+            println!("update_cost with creator: failed");
+            println!("error: {}", error);
+        }
+    };
+
+    // check cost updated
+    test_contract_method(&creator, &worker_creator, &contract, "get_cost",
+        json!({}), "201", true
+    ).await.expect("error when getting getting cost");
+
+    match test_contract_method(&consumer_low_balace, &worker_consumer_low_balance, &contract, "subscribe",
+        json!({"creator_address": &creator.id().to_owned()}), "", true
+    ).await {
+        Ok(_) => println!("subscribe with consumer with low balance: failed"),
+        Err(_) => println!("subscribe with consumer with low balance: passed")
+    };
+
+    // update cost to below test account balance
+    match test_contract_method(&creator, &worker_creator, &contract, "update_cost",
+        json!({
+            "cost": "2"
+        }),
+        "", false
+    ).await {
+        Ok(_) => println!("update_cost with creator: passed"),
+        Err(error) => {
+            println!("update_cost with creator: failed");
+            println!("error: {}", error);
+        }
+    };
+
+    // subscribe at new lower cost
+    match test_contract_method(&consumer_low_balace, &worker_consumer_low_balance, &contract, "subscribe",
+        json!({
+            "creator_address": &creator.id().to_owned()
+        }),
+        "", false
+    ).await {
+        Ok(_) => println!("subscribe with consumer now that cost lowered: passed"),
+        Err(error) => {
+            println!("subscribe with consumer now that cost lowered: failed");
+            println!("error: {}", error);
+        }
+    };
+
+    test_contract_method(&creator, &worker_creator, &contract, ".data",
+        json!({}),
+        "", true
+    ).await.expect("no method named data");
+
+
 
     remove_near_credentials();
     Ok(())
@@ -137,7 +222,7 @@ fn remove_near_credentials() {
                 .arg(".near-credentials/")
                 .output()
                 .expect("failed to execute process");
-    println!("Building contract output: {:?}", output);
+    println!("Removing near credentials output: {:?}", output);
 }
 
 async fn test_contract_method(
@@ -149,7 +234,6 @@ async fn test_contract_method(
     expected_result: &str,
     result_is_serializable: bool
 ) -> anyhow::Result<()> {
-    println!("testing {} method", method);
     // make contract call
     let result = caller
         .call(
@@ -169,8 +253,11 @@ async fn test_contract_method(
     // parse result to json
     match result.json::<String>() {
         Ok(result) => {
-            if (result == expected_result) == true {
-            println!("get_content test: passed");
+            if (result == expected_result.to_owned()) == true {
+            println!("{} test: passed", method);
+            } else {
+                println!("{} test: failed", method);
+                println!("left: {} != right: {}", result, expected_result);
             }
         },
         Err(error) => return Err(error)
