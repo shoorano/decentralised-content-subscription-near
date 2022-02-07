@@ -1,7 +1,7 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
-    collections::{LookupMap, LookupSet},
+    collections::LookupMap,
     BorshStorageKey,
     AccountId,
     json_types::U128,
@@ -11,15 +11,17 @@ use near_sdk::{
 pub struct Profile {
     pub profile_type: ProfileType,
     pub content: LookupMap<String, String>,
-    pub subscribers: LookupSet<AccountId>,
-    pub costs: LookupMap<String, U128>
+    pub subscribers: LookupMap<AccountId, i32>,
+    pub costs: LookupMap<String, U128>,
+    pub content_count: i32,
+    pub payment_interval: i32
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum StorageKeys {
     Data,
     Content,
-    Subscriber,
+    Subscribers,
     Cost
 }
 
@@ -48,8 +50,8 @@ impl Default for Profile {
             &"date".to_owned(),
             &"content test".to_owned()
         );
-        let subscribers = LookupSet::new(
-            StorageKeys::Subscriber
+        let subscribers = LookupMap::new(
+            StorageKeys::Subscribers
         );
         let mut costs: LookupMap<String, U128> = LookupMap::new(
             StorageKeys::Cost
@@ -59,18 +61,20 @@ impl Default for Profile {
             profile_type: ProfileType::Creator,
             content,
             subscribers,
-            costs
+            costs,
+            content_count: 1,
+            payment_interval: 4
         }
     }
 }
 
 impl Profile {
-    pub fn new(profile_type: ProfileType, cost: U128) -> Self {
+    pub fn new(profile_type: ProfileType, cost: U128, payment_interval: i32) -> Self {
         let content: LookupMap<String, String> = LookupMap::new(
             StorageKeys::Content
         );
-        let subscribers = LookupSet::new(
-            StorageKeys::Subscriber
+        let subscribers = LookupMap::new(
+            StorageKeys::Subscribers
         );
         let mut costs = LookupMap::<String, U128>::new(
             StorageKeys::Cost
@@ -80,13 +84,15 @@ impl Profile {
             profile_type,
             content,
             subscribers,
-            costs
+            costs,
+            content_count: 0,
+            payment_interval
         }
     }
 
     pub fn subscribe(&mut self) {
         let subscriber_address = env::signer_account_id();
-        self.subscribers.insert(&subscriber_address);
+        self.subscribers.insert(&subscriber_address, &self.content_count);
     }
 
     pub fn get_content(&self, date: String, is_owner: bool) -> Result<String, String> {
@@ -97,14 +103,22 @@ impl Profile {
             }
         } else {
             let subscriber_address = env::signer_account_id();
-            if self.subscribers.contains(&subscriber_address) {
-                match self.content.get(&date) {
-                    Some(content) => Ok(content),
-                    None => Err("Could not find content for that date".to_owned())
+            match self.subscribers.get(&subscriber_address) {
+                Some(count) => {
+                    if self.content_count <= count + self.payment_interval {
+                        match self.content.get(&date) {
+                            Some(content) => Ok(content),
+                            None => Err("Could not find content for that date".to_owned())
+                        }
+                    } else {
+                        env::log_str("Please top up as current subscription has ended");
+                        Err("Please top up as current subscription has ended".to_owned())
+                    }
+                },
+                None => {
+                    env::log_str("Not a subscriber");
+                    Err("Not a subscriber, please subscribe".to_owned())
                 }
-            } else {
-                env::log_str("Not a subscriber");
-                Err("Not a subscriber, please subscribe".to_owned())
             }
         }
     }
