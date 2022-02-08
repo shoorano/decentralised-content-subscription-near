@@ -36,15 +36,17 @@ impl Contract {
         self.data.get(&account_id)
     }
 
-    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: String) {
+    pub fn add_profile(&mut self, account_id: AccountId, profile_type: String, cost: String, payment_interval: String) {
         let cost_in_yocto_near = U128::from(
             cost.parse::<u128>().unwrap() * 1_000_000_000_000_000_000_000_000
         );
+        let payment_interval = payment_interval.parse::<i32>().unwrap();
         self.data.insert(
             &account_id,
             &Profile::new(
                 ProfileType::new(&profile_type),
-                cost_in_yocto_near
+                cost_in_yocto_near,
+                payment_interval
             )
         );
     }
@@ -58,9 +60,23 @@ impl Contract {
             Some(cost) => cost,
             None => panic!("could not access cost")
         };
-        assert!(!profile.subscribers.contains(&env::signer_account_id()));
-        Promise::new(creator_address).transfer(amount.0);
-        profile.subscribe();
+        if let Some(content_count) = profile.content_count.get(&"content_count".to_owned()) {
+            match profile.subscribers.get(&env::signer_account_id()) {
+                Some(count) => {
+                    if content_count > count + profile.payment_interval {
+                        Promise::new(creator_address).transfer(amount.0);
+                        profile.subscribe();
+                    } else {
+                        env::log_str("User has content left on current subscription");
+                        panic!("User has content left on current subscription");
+                    }
+                },
+                None => {
+                    Promise::new(creator_address).transfer(amount.0);
+                    profile.subscribe();
+                }
+            }
+        }
     }
 
     pub fn add_content(&mut self, date: String, content: String) {
@@ -69,6 +85,9 @@ impl Contract {
             Some(profile) => profile,
             None => return
         };
+        if let Some(current_content_count) = profile.content_count.get(&"content_count".to_owned()) {
+            profile.content_count.insert(&"content_count".to_owned(), &(current_content_count + 1));
+        }
         profile.add_content(date, content);
     }
 
@@ -78,7 +97,10 @@ impl Contract {
             None => panic!("this profile does not exist")
         };
         let is_owner = env::signer_account_id() == creator_address;
-        match profile.get_content(date, is_owner) {
+        match profile.get_content(
+            date,
+            is_owner
+        ) {
             Ok(content) => content,
             Err(error) => panic!("{}", error)
         }
@@ -134,10 +156,16 @@ mod tests {
         testing_env!(context);
         let account_id = "dan.testnet".parse().unwrap();
         let mut contract = Contract::default();
-        contract.add_profile(account_id, "consumer".to_owned(), "1".to_owned());
+        contract.add_profile(
+            account_id,
+            "consumer".to_owned(),
+            "1".to_owned(),
+            "4".to_owned()
+        );
         let test_profile = Profile::new(
             ProfileType::Consumer,
-            U128::from(10u128.pow(20))
+            U128::from(10u128.pow(20)),
+            4
         );
         let profile = match contract.get_profile(&"dan.testnet".parse().unwrap()) {
             Some(profile) => profile,
@@ -148,8 +176,8 @@ mod tests {
             profile.profile_type
         );
         assert_eq!(
-            test_profile.subscribers.contains(&"consumer".parse().unwrap()),
-            profile.subscribers.contains(&"consumer".parse().unwrap())
+            test_profile.subscribers.get(&"consumer".parse().unwrap()),
+            profile.subscribers.get(&"consumer".parse().unwrap())
         );
     }
 
@@ -168,8 +196,8 @@ mod tests {
             None => return
         };
         assert_eq!(
-            true,
-            profile.subscribers.contains(&"dan.testnet".parse().unwrap())
+            Some(1),
+            profile.subscribers.get(&"dan.testnet".parse().unwrap())
         );
     }
 
@@ -266,7 +294,8 @@ mod tests {
                 contract.add_profile(
                     "consumer".parse().unwrap(),
                     "consumer".to_owned(),
-                    "1".to_owned()
+                    "1".to_owned(),
+                    "4".to_owned()
                 );
                 contract.add_content(
                     "date part 2".to_owned(),
@@ -292,6 +321,7 @@ mod tests {
         contract.add_profile(
             "creator".parse().unwrap(),
             "creator".to_owned(),
+            "3".to_owned(),
             "4".to_owned()
         );
         contract.update_cost(

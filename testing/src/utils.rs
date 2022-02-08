@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::process::Command;
 
+/// general helper functions
 pub mod utils {
     use super::*;    
     /// returns file as Vec<u8>
@@ -29,7 +30,6 @@ pub mod utils {
     /// then copies to contracts/res directory
     pub fn build_contract() {
         let commands = vec![
-            ("echo", ""),
             ("echo", "    Building Contract .wasm file"),
             ("echo", ""),
             ("cargo", "build --target wasm32-unknown-unknown --release"),
@@ -41,7 +41,6 @@ pub mod utils {
                         .args(tup.1.split(" "), )
                         .output()
                         .expect("failed to execute process");
-
             io::stdout().write_all(&output.stdout).unwrap();
             io::stderr().write_all(&output.stderr).unwrap();
         }
@@ -54,6 +53,7 @@ pub mod utils {
                     .arg(".near-credentials/")
                     .output()
                     .expect("failed to execute process");
-        println!("Removing near credentials output: {:?}", output);
+        io::stdout().write_all(&output.stdout).unwrap();
+        io::stderr().write_all(&output.stderr).unwrap();
     }
 }
