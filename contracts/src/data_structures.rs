@@ -10,11 +10,11 @@ use near_sdk::{
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Profile {
     pub profile_type: ProfileType,
+    pub payment_interval: i32,
+    pub content_count: LookupMap<String, i32>,
     pub content: LookupMap<String, String>,
     pub subscribers: LookupMap<AccountId, i32>,
-    pub costs: LookupMap<String, U128>,
-    pub content_count: i32,
-    pub payment_interval: i32
+    pub costs: LookupMap<String, U128>
 }
 
 #[derive(BorshStorageKey, BorshSerialize)]
@@ -22,7 +22,8 @@ pub enum StorageKeys {
     Data,
     Content,
     Subscribers,
-    Cost
+    Cost,
+    ContentCount
 }
 
 #[derive(BorshDeserialize, BorshSerialize, PartialEq, Debug)]
@@ -57,12 +58,16 @@ impl Default for Profile {
             StorageKeys::Cost
         );
         costs.insert(&"cost".to_owned(), &U128::from(10u128.pow(25)));
+        let mut content_count: LookupMap<String, i32> = LookupMap::new(
+        StorageKeys::ContentCount
+        );
+        content_count.insert(&"content_count".to_owned(), &1);
         Self {
             profile_type: ProfileType::Creator,
             content,
             subscribers,
             costs,
-            content_count: 1,
+            content_count,
             payment_interval: 4
         }
     }
@@ -80,19 +85,25 @@ impl Profile {
             StorageKeys::Cost
         );
         costs.insert(&"cost".to_owned(), &cost);
+        let mut content_count: LookupMap<String, i32> = LookupMap::new(
+            StorageKeys::ContentCount
+            );
+        content_count.insert(&"content_count".to_owned(), &0);
         Self {
             profile_type,
             content,
             subscribers,
             costs,
-            content_count: 0,
+            content_count,
             payment_interval
         }
     }
 
     pub fn subscribe(&mut self) {
         let subscriber_address = env::signer_account_id();
-        self.subscribers.insert(&subscriber_address, &self.content_count);
+        if let Some(content_count) = self.content_count.get(&"content_count".to_owned()) {
+            self.subscribers.insert(&subscriber_address, &content_count);
+        }
     }
 
     pub fn get_content(&self, date: String, is_owner: bool) -> Result<String, String> {
@@ -103,22 +114,26 @@ impl Profile {
             }
         } else {
             let subscriber_address = env::signer_account_id();
-            match self.subscribers.get(&subscriber_address) {
-                Some(count) => {
-                    if self.content_count <= count + self.payment_interval {
-                        match self.content.get(&date) {
-                            Some(content) => Ok(content),
-                            None => Err("Could not find content for that date".to_owned())
+            if let Some(content_count) = self.content_count.get(&"content_count".to_owned()) {
+                match self.subscribers.get(&subscriber_address) {
+                    Some(count) => {
+                        if content_count <= count + self.payment_interval {
+                            match self.content.get(&date) {
+                                Some(content) => Ok(content),
+                                None => Err("Could not find content for that date".to_owned())
+                            }
+                        } else {
+                            env::log_str("Please top up as current subscription has ended");
+                            Err("Please top up as current subscription has ended".to_owned())
                         }
-                    } else {
-                        env::log_str("Please top up as current subscription has ended");
-                        Err("Please top up as current subscription has ended".to_owned())
+                    },
+                    None => {
+                        env::log_str("Not a subscriber");
+                        Err("Not a subscriber, please subscribe".to_owned())
                     }
-                },
-                None => {
-                    env::log_str("Not a subscriber");
-                    Err("Not a subscriber, please subscribe".to_owned())
                 }
+            } else {
+                Err("Could not get content count".to_owned())
             }
         }
     }

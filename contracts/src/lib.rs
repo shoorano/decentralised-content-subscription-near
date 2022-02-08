@@ -60,19 +60,21 @@ impl Contract {
             Some(cost) => cost,
             None => panic!("could not access cost")
         };
-        match profile.subscribers.get(&env::signer_account_id()) {
-            Some(count) => {
-                if profile.content_count > count + profile.payment_interval {
+        if let Some(content_count) = profile.content_count.get(&"content_count".to_owned()) {
+            match profile.subscribers.get(&env::signer_account_id()) {
+                Some(count) => {
+                    if content_count > count + profile.payment_interval {
+                        Promise::new(creator_address).transfer(amount.0);
+                        profile.subscribe();
+                    } else {
+                        env::log_str("User has content left on current subscription");
+                        panic!("User has content left on current subscription");
+                    }
+                },
+                None => {
                     Promise::new(creator_address).transfer(amount.0);
                     profile.subscribe();
-                } else {
-                    env::log_str("User has content left on current subscription");
-                    panic!("User has content left on current subscription");
                 }
-            },
-            None => {
-                Promise::new(creator_address).transfer(amount.0);
-                profile.subscribe();
             }
         }
     }
@@ -83,7 +85,9 @@ impl Contract {
             Some(profile) => profile,
             None => return
         };
-        profile.content_count += 1;
+        if let Some(current_content_count) = profile.content_count.get(&"content_count".to_owned()) {
+            profile.content_count.insert(&"content_count".to_owned(), &(current_content_count + 1));
+        }
         profile.add_content(date, content);
     }
 

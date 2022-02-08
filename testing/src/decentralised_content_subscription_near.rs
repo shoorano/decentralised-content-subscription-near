@@ -29,10 +29,13 @@ async fn main() -> anyhow::Result<()> {
         .expect("failed to create creator account");
     // cost to subscribe to creators profile in NEAR
     let creator_profile_cost = "1";
+    // payment_interval for creators profile: represents how many pieces
+    // of content a single payment grants a subscriber access to
+    let payment_interval = "3";
     // content to be added to the creators profile
     let content = "https://www.youtube.com/watch?v=MddGbXgIt2E".to_owned();
     // date to be used as a key for creators content
-    let content_date = "31-01-2022".to_owned();
+    let content_id = "1".to_owned();
 
     // create an Account struct for a consumer who will subscribe to creators profile
     let consumer = worker_consumer.dev_create_account()
@@ -50,7 +53,8 @@ async fn main() -> anyhow::Result<()> {
         json!({
             "account_id": &creator.id().to_owned(),
             "profile_type": "creator",
-            "cost": creator_profile_cost
+            "cost": creator_profile_cost,
+            "payment_interval": payment_interval
         }),
         "", false
     ).await {
@@ -78,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     // tests add_content method of contract        
     match test_contract_call(&creator, &worker_creator, &contract, "add_content",
         json!({
-            "date": &content_date,
+            "date": &content_id,
             "content": &content
         }),
         "", false
@@ -91,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     test_contract_call(&creator, &worker_creator, &contract, "get_content",
         json!({
             "creator_address": creator.id(),
-            "date": &content_date
+            "date": &content_id
         }),
         &content, true
     ).await.expect("error when getting content");
@@ -100,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
     match test_contract_call(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
-            "date": &content_date
+            "date": &content_id
         }),
         &content, true
     ).await {
@@ -130,9 +134,9 @@ async fn main() -> anyhow::Result<()> {
     test_contract_call(&consumer, &worker_consumer, &contract, "get_content",
         json!({
             "creator_address": &creator.id().to_owned(),
-            "date": &content_date
+            "date": &content_id
         }),
-        &content, false
+        &content, true
     ).await.expect("error when getting content with subscriber");
     
     // subscribe with insufficient funds
@@ -188,6 +192,32 @@ async fn main() -> anyhow::Result<()> {
             println!("subscribe with consumer now that cost lowered: failed");
             println!("error: {}", error);
         }
+    };
+
+    // add more content such that consumer can't access the latest content
+    for content in [("2", "content 2"), ("3", "content 3"), ("4", "content 4"), ("5", "content 5")] {
+        match test_contract_call(&creator, &worker_creator, &contract, "add_content",
+            json!({
+                "date": content.0,
+                "content": content.1
+            }),
+            "", false
+        ).await {
+            Ok(_) => println!("add_content_{} with creator: passed", content.0),
+            Err(_) => println!("add_content_{} with creator: failed", content.0)
+        };
+    }
+
+    // get content that consumer should not have access too: expects a panicjjj
+    match test_contract_call(&consumer, &worker_consumer, &contract, "get_content",
+        json!({
+            "creator_address": &creator.id().to_owned(),
+            "date": "5"
+        }),
+        "content 5", true
+    ).await {
+        Ok(_) => println!("get_content when no access: failed"),
+        Err(error) => println!("get_content when no access: passed {}", error)
     };
 
     remove_near_credentials();
