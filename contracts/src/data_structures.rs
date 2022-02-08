@@ -1,7 +1,7 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
-    collections::LookupMap,
+    collections::{LookupMap, LookupSet},
     BorshStorageKey,
     AccountId,
     json_types::U128,
@@ -13,6 +13,7 @@ pub struct Profile {
     pub payment_interval: i32,
     pub content_count: LookupMap<String, i32>,
     pub content: LookupMap<String, String>,
+    pub creators_content: LookupMap<AccountId, LookupSet<i32>>,
     pub subscribers: LookupMap<AccountId, i32>,
     pub costs: LookupMap<String, U128>
 }
@@ -21,6 +22,8 @@ pub struct Profile {
 pub enum StorageKeys {
     Data,
     Content,
+    CreatorsContent,
+    ContentIds,
     Subscribers,
     Cost,
     ContentCount
@@ -51,6 +54,9 @@ impl Default for Profile {
             &"date".to_owned(),
             &"content test".to_owned()
         );
+        let creators_content: LookupMap<AccountId, LookupSet<i32>> = LookupMap::new(
+            StorageKeys::CreatorsContent
+        );
         let subscribers = LookupMap::new(
             StorageKeys::Subscribers
         );
@@ -62,9 +68,11 @@ impl Default for Profile {
         StorageKeys::ContentCount
         );
         content_count.insert(&"content_count".to_owned(), &1);
+
         Self {
             profile_type: ProfileType::Creator,
             content,
+            creators_content,
             subscribers,
             costs,
             content_count,
@@ -78,6 +86,9 @@ impl Profile {
         let content: LookupMap<String, String> = LookupMap::new(
             StorageKeys::Content
         );
+        let creators_content: LookupMap<AccountId, LookupSet<i32>> = LookupMap::new(
+            StorageKeys::CreatorsContent
+        );
         let subscribers = LookupMap::new(
             StorageKeys::Subscribers
         );
@@ -89,9 +100,11 @@ impl Profile {
             StorageKeys::ContentCount
             );
         content_count.insert(&"content_count".to_owned(), &0);
+
         Self {
             profile_type,
             content,
+            creators_content,
             subscribers,
             costs,
             content_count,
